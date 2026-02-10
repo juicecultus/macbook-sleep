@@ -76,9 +76,11 @@ echo "[5/5] Removing hibernate overrides..."
 rm -f /etc/systemd/logind.conf.d/hibernate.conf
 rmdir /etc/systemd/logind.conf.d 2>/dev/null || true
 
-# Remove suspend→hibernate override
+# Remove suspend→hibernate override and module unload overrides
 rm -f /etc/systemd/system/systemd-suspend.service.d/override.conf
 rmdir /etc/systemd/system/systemd-suspend.service.d 2>/dev/null || true
+rm -f /etc/systemd/system/systemd-hibernate.service.d/unload-modules.conf
+rmdir /etc/systemd/system/systemd-hibernate.service.d 2>/dev/null || true
 
 # Clean up old files from previous versions
 rm -f /etc/systemd/sleep.conf.d/hibernate.conf
