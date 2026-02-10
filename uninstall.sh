@@ -82,10 +82,15 @@ rmdir /etc/systemd/system/systemd-suspend.service.d 2>/dev/null || true
 rm -f /etc/systemd/system/systemd-hibernate.service.d/unload-modules.conf
 rmdir /etc/systemd/system/systemd-hibernate.service.d 2>/dev/null || true
 
+# Remove post-resume script
+rm -f /usr/lib/macbook-sleep/hibernate-post-resume.sh
+rmdir /usr/lib/macbook-sleep 2>/dev/null || true
+
 # Clean up old files from previous versions
 rm -f /etc/systemd/sleep.conf.d/hibernate.conf
 rmdir /etc/systemd/sleep.conf.d 2>/dev/null || true
 rm -f /usr/lib/systemd/system-sleep/macbook-suspend-modules
+rm -f /usr/lib/systemd/system-sleep/macbook-hibernate-modules
 
 systemctl daemon-reload
 

@@ -157,10 +157,25 @@ HandleSuspendKey=hibernate
 ```ini
 [Service]
 ExecStart=
+ExecStartPre=/bin/bash -c "modprobe -r applespi spi_pxa2xx_platform spi_pxa2xx_core applesmc brcmfmac_wcc brcmfmac brcmutil hci_uart facetimehd acpi_call 2>/dev/null; echo 1 > /sys/power/pm_debug_messages; sync"
 ExecStart=/usr/lib/systemd/systemd-sleep hibernate
+ExecStartPost=/usr/lib/macbook-sleep/hibernate-post-resume.sh
 ```
 
-This makes `systemctl suspend` (and anything that calls it, like the COSMIC moon button) actually trigger hibernate. Using `sleep.conf SuspendState=disk` breaks logind's `CanSuspend` detection, so we override the service directly instead.
+`/etc/systemd/system/systemd-hibernate.service.d/unload-modules.conf`:
+```ini
+[Service]
+ExecStartPre=/bin/bash -c "modprobe -r applespi spi_pxa2xx_platform spi_pxa2xx_core applesmc brcmfmac_wcc brcmfmac brcmutil hci_uart facetimehd acpi_call 2>/dev/null; echo 1 > /sys/power/pm_debug_messages; sync"
+ExecStartPost=/usr/lib/macbook-sleep/hibernate-post-resume.sh
+```
+
+**How this works:**
+
+1. `ExecStartPre` unloads all Apple-specific modules whose device freeze callbacks hang the kernel during hibernate, and enables PM debug messages (which affects timing enough to prevent race conditions)
+2. `ExecStart` redirects `systemctl suspend` to hibernate (using `sleep.conf SuspendState=disk` breaks logind's `CanSuspend` detection, so we override the service directly)
+3. `ExecStartPost` reloads the SPI stack and all Apple modules after hibernate resume so the keyboard, trackpad, WiFi, etc. work immediately
+
+The post-resume script is installed at `/usr/lib/macbook-sleep/hibernate-post-resume.sh`.
 
 ## Supported Models
 

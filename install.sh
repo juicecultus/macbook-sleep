@@ -170,7 +170,7 @@ fi
 # --- Fix 5: Remap sleep triggers to hibernate + unload modules ---
 echo "[5/5] Remapping sleep triggers to hibernate..."
 
-MODULE_UNLOAD='modprobe -r applespi spi_pxa2xx_platform spi_pxa2xx_core applesmc brcmfmac_wcc brcmfmac brcmutil hci_uart facetimehd acpi_call 2>/dev/null; true'
+MODULE_UNLOAD='modprobe -r applespi spi_pxa2xx_platform spi_pxa2xx_core applesmc brcmfmac_wcc brcmfmac brcmutil hci_uart facetimehd acpi_call 2>/dev/null; echo 1 > /sys/power/pm_debug_messages; sync'
 
 # logind: lid close and suspend key → hibernate
 mkdir -p /etc/systemd/logind.conf.d
@@ -181,20 +181,27 @@ HandleLidSwitchExternalPower=hibernate
 HandleSuspendKey=hibernate
 EOF
 
-# Override suspend service: unload Apple modules, then hibernate
+# Install post-resume module reload script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+mkdir -p /usr/lib/macbook-sleep
+install -m 755 "$SCRIPT_DIR/hibernate-post-resume.sh" /usr/lib/macbook-sleep/hibernate-post-resume.sh
+
+# Override suspend service: unload Apple modules, then hibernate, reload after
 mkdir -p /etc/systemd/system/systemd-suspend.service.d
 cat > /etc/systemd/system/systemd-suspend.service.d/override.conf <<EOF
 [Service]
 ExecStart=
 ExecStartPre=/bin/bash -c "${MODULE_UNLOAD}"
 ExecStart=/usr/lib/systemd/systemd-sleep hibernate
+ExecStartPost=/usr/lib/macbook-sleep/hibernate-post-resume.sh
 EOF
 
-# Also add module unload to hibernate service directly
+# Also add module unload/reload to hibernate service directly
 mkdir -p /etc/systemd/system/systemd-hibernate.service.d
 cat > /etc/systemd/system/systemd-hibernate.service.d/unload-modules.conf <<EOF
 [Service]
 ExecStartPre=/bin/bash -c "${MODULE_UNLOAD}"
+ExecStartPost=/usr/lib/macbook-sleep/hibernate-post-resume.sh
 EOF
 
 # Remove old system-sleep hooks if present
@@ -211,7 +218,7 @@ echo "  - Session freezing: restored"
 echo "  - Swap file: ${SWAP_MB}MB at $(findmnt -n /swap > /dev/null 2>&1 && echo /swap/swapfile || echo /swapfile)"
 echo "  - Kernel: resume=$RESUME_DEV resume_offset=$RESUME_OFFSET"
 echo "  - All sleep triggers (lid, suspend) → hibernate"
-echo "  - Apple modules unloaded before hibernate (fresh load on boot)"
+echo "  - Apple modules unloaded before hibernate, reloaded after resume"
 echo ""
 echo "Reboot now, then test by closing the lid."
 echo "Wake takes ~10-15 seconds (full boot + session restore)."
