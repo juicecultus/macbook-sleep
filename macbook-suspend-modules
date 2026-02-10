@@ -1,10 +1,10 @@
 #!/bin/bash
-# Force-reload MacBook-specific modules after resume from s2idle.
+# Unload problematic modules before suspend to prevent resume hangs,
+# then reload them after wake.
 #
-# These drivers do not properly reinitialise hardware on wake.
-# We keep them loaded during suspend so the keyboard can still
-# generate wake events, then force-reload them after resume to
-# reset the SPI controller, WiFi firmware, and webcam.
+# applespi is kept loaded so keyboard/trackpad can generate wake events.
+# All other Apple/out-of-tree modules are unloaded because their resume
+# callbacks hang when the hardware they manage loses power during s2idle.
 #
 # Installed to /usr/lib/systemd/system-sleep/ by install.sh
 
@@ -12,30 +12,41 @@ LOG=/var/log/resume-modules.log
 
 case "$1" in
     pre)
-        echo "[$(date)] suspend: modules left loaded for wake support" >> "$LOG"
+        echo "[$(date)] suspend: unloading modules..." >> "$LOG"
+
+        # Unload WiFi (resume callback hangs reinitialising firmware)
+        modprobe -r brcmfmac_wcc 2>> "$LOG"
+        modprobe -r brcmfmac 2>> "$LOG" && echo "  brcmfmac unloaded" >> "$LOG"
+
+        # Unload webcam
+        modprobe -r facetimehd 2>> "$LOG" && echo "  facetimehd unloaded" >> "$LOG"
+
+        # Unload acpi_call (out-of-tree, used by auto-brightness)
+        modprobe -r acpi_call 2>> "$LOG" && echo "  acpi_call unloaded" >> "$LOG"
+
+        # applespi stays loaded for keyboard/trackpad wake
+        echo "[$(date)] suspend: ready" >> "$LOG"
         ;;
     post)
         echo "[$(date)] resume: reloading modules..." >> "$LOG"
 
-        # Wait for hardware (SPI controller, PCIe) to settle after resume
-        sleep 2
+        # Small delay for hardware to settle
+        sleep 1
 
-        # Reload applespi (SPI keyboard/touchpad)
+        # Reload applespi to reinitialise SPI keyboard/touchpad
         modprobe -r applespi 2>> "$LOG" && echo "  applespi unloaded" >> "$LOG"
         sleep 1
-        modprobe applespi 2>> "$LOG" && echo "  applespi loaded" >> "$LOG"
+        modprobe applespi 2>> "$LOG" && echo "  applespi reloaded" >> "$LOG"
 
-        # Reload brcmfmac (WiFi — needs firmware reload)
-        modprobe -r brcmfmac_wcc 2>> "$LOG"
-        modprobe -r brcmfmac 2>> "$LOG" && echo "  brcmfmac unloaded" >> "$LOG"
-        sleep 1
+        # Reload WiFi
         modprobe brcmfmac 2>> "$LOG" && echo "  brcmfmac loaded" >> "$LOG"
 
-        # Reload facetimehd (webcam)
-        modprobe -r facetimehd 2>> "$LOG"
-        sleep 1
+        # Reload webcam
         modprobe facetimehd 2>> "$LOG" && echo "  facetimehd loaded" >> "$LOG"
 
-        echo "[$(date)] resume: module reload complete" >> "$LOG"
+        # Reload acpi_call
+        modprobe acpi_call 2>> "$LOG" && echo "  acpi_call loaded" >> "$LOG"
+
+        echo "[$(date)] resume: complete" >> "$LOG"
         ;;
 esac
