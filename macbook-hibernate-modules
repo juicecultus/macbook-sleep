@@ -1,0 +1,44 @@
+#!/bin/bash
+# Unload ALL Apple/out-of-tree modules before hibernate to prevent
+# device freeze callbacks from hanging the kernel.
+#
+# Hibernate does a full power-off, so no modules are needed for wake.
+# On next boot, everything loads fresh from scratch.
+#
+# Installed to /usr/lib/systemd/system-sleep/ by install.sh
+
+LOG=/var/log/hibernate-modules.log
+
+case "$1" in
+    pre)
+        echo "[$(date)] hibernate: unloading modules..." >> "$LOG"
+
+        # Apple SPI keyboard/touchpad + SPI stack
+        modprobe -r applespi 2>> "$LOG" && echo "  applespi" >> "$LOG"
+        modprobe -r spi_pxa2xx_platform 2>> "$LOG" && echo "  spi_pxa2xx_platform" >> "$LOG"
+        modprobe -r spi_pxa2xx_core 2>> "$LOG" && echo "  spi_pxa2xx_core" >> "$LOG"
+        # intel_lpss_pci stays — generic Intel driver, can't unload, handles freeze fine
+
+        # Apple SMC (fans, sensors)
+        modprobe -r applesmc 2>> "$LOG" && echo "  applesmc" >> "$LOG"
+
+        # WiFi + Bluetooth
+        modprobe -r brcmfmac_wcc 2>> "$LOG"
+        modprobe -r brcmfmac 2>> "$LOG" && echo "  brcmfmac" >> "$LOG"
+        modprobe -r brcmutil 2>> "$LOG" && echo "  brcmutil" >> "$LOG"
+        modprobe -r hci_uart 2>> "$LOG" && echo "  hci_uart" >> "$LOG"
+
+        # Webcam
+        modprobe -r facetimehd 2>> "$LOG" && echo "  facetimehd" >> "$LOG"
+
+        # acpi_call (auto-brightness)
+        modprobe -r acpi_call 2>> "$LOG" && echo "  acpi_call" >> "$LOG"
+
+        echo "[$(date)] hibernate: modules unloaded, ready" >> "$LOG"
+        ;;
+    post)
+        # This only runs if hibernate fails and the system resumes
+        # (on successful hibernate, next boot loads everything fresh)
+        echo "[$(date)] hibernate: post hook (hibernate may have failed)" >> "$LOG"
+        ;;
+esac
