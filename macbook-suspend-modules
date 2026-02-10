@@ -1,22 +1,41 @@
 #!/bin/bash
-# Unload and reload MacBook-specific modules around suspend/resume.
-# These out-of-tree or Apple-specific drivers do not properly
-# reinitialise hardware after s2idle, causing keyboard, WiFi,
-# and webcam failures on wake.
+# Force-reload MacBook-specific modules after resume from s2idle.
+#
+# These drivers do not properly reinitialise hardware on wake.
+# We keep them loaded during suspend so the keyboard can still
+# generate wake events, then force-reload them after resume to
+# reset the SPI controller, WiFi firmware, and webcam.
 #
 # Installed to /usr/lib/systemd/system-sleep/ by install.sh
 
+LOG=/var/log/resume-modules.log
+
 case "$1" in
     pre)
-        # Order matters: unload dependents first
-        modprobe -r brcmfmac_wcc 2>/dev/null
-        modprobe -r brcmfmac 2>/dev/null
-        modprobe -r applespi 2>/dev/null
-        modprobe -r facetimehd 2>/dev/null
+        echo "[$(date)] suspend: modules left loaded for wake support" >> "$LOG"
         ;;
     post)
-        modprobe applespi 2>/dev/null
-        modprobe brcmfmac 2>/dev/null
-        modprobe facetimehd 2>/dev/null
+        echo "[$(date)] resume: reloading modules..." >> "$LOG"
+
+        # Wait for hardware (SPI controller, PCIe) to settle after resume
+        sleep 2
+
+        # Reload applespi (SPI keyboard/touchpad)
+        modprobe -r applespi 2>> "$LOG" && echo "  applespi unloaded" >> "$LOG"
+        sleep 1
+        modprobe applespi 2>> "$LOG" && echo "  applespi loaded" >> "$LOG"
+
+        # Reload brcmfmac (WiFi — needs firmware reload)
+        modprobe -r brcmfmac_wcc 2>> "$LOG"
+        modprobe -r brcmfmac 2>> "$LOG" && echo "  brcmfmac unloaded" >> "$LOG"
+        sleep 1
+        modprobe brcmfmac 2>> "$LOG" && echo "  brcmfmac loaded" >> "$LOG"
+
+        # Reload facetimehd (webcam)
+        modprobe -r facetimehd 2>> "$LOG"
+        sleep 1
+        modprobe facetimehd 2>> "$LOG" && echo "  facetimehd loaded" >> "$LOG"
+
+        echo "[$(date)] resume: module reload complete" >> "$LOG"
         ;;
 esac
