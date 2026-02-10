@@ -76,11 +76,16 @@ if ! $APPLIED; then
     echo "  WARNING: Could not detect boot loader. Manually add '$PARAM' to your kernel parameters."
 fi
 
+# --- Fix 4: Install module unload/reload hook ---
+echo "[4/4] Installing suspend/resume module hook..."
+install -m 755 "$(dirname "$0")/macbook-suspend-modules" /usr/lib/systemd/system-sleep/macbook-suspend-modules
+
 echo ""
-echo "Done! All three fixes applied."
+echo "Done! All four fixes applied."
 echo ""
 echo "  - NVIDIA sleep services: disabled"
 echo "  - Session freezing: restored"
 echo "  - Sleep mode: s2idle (bypasses broken S3 firmware)"
+echo "  - Module hook: unloads applespi/brcmfmac/facetimehd before suspend, reloads after"
 echo ""
 echo "Reboot for the kernel parameter to take effect, then test suspend."

@@ -46,6 +46,9 @@ if [[ -f /etc/default/grub ]]; then
     fi
 fi
 
+echo "[4/4] Removing suspend/resume module hook..."
+rm -f /usr/lib/systemd/system-sleep/macbook-suspend-modules
+
 echo ""
 echo "Done! All fixes reverted."
 echo "Reboot to apply changes."

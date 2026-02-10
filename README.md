@@ -36,21 +36,31 @@ These errors indicate Apple's DSDT/SSDT tables were not designed for Linux's ACP
 - DSDT patching is fragile and the crash may be in the EFI itself, not the ACPI tables
 - There is no known upstream kernel fix for MacBook 10,1 S3 resume
 
+### 3. Apple-specific drivers fail to resume
+
+Even with s2idle, several out-of-tree or Apple-specific kernel modules do not properly reinitialise hardware after waking. The SPI controller that manages the keyboard and touchpad (`applespi` via `intel-lpss` / `pxa2xx-spi`) loses state during suspend. On resume, the driver fails to reinitialise, leaving the keyboard and touchpad completely unresponsive.
+
+Similarly, the Broadcom WiFi driver (`brcmfmac`) and FaceTime HD webcam driver (`facetimehd`) often fail to resume cleanly.
+
+**How we confirmed this:** After switching to s2idle, the display came back on resume and the greeter appeared, but the keyboard was completely dead — even on a plain TTY (no Wayland compositor). This proved the issue is in the SPI/input driver resume path, not the desktop environment.
+
 ### Symptoms
 
 - System crashes or hangs on suspend/resume
 - Display goes dark briefly then returns to the greeter with no WiFi
+- Keyboard and touchpad unresponsive after wake (even on TTY)
 - Greeter icons missing or broken after resume
 - Desktop crashes after login (only wallpaper visible, no panels/dock)
 - Hard reboot required to recover
 
 ## The Fix
 
-This script applies three fixes:
+This script applies four fixes:
 
 1. **Disables** the 4 NVIDIA sleep services (they do nothing without an NVIDIA GPU)
 2. **Restores session freezing** during suspend by overriding the `nvidia-utils` drop-in configs
 3. **Switches sleep mode from S3 (`deep`) to `s2idle`** via kernel parameter, bypassing the broken Apple firmware resume path entirely
+4. **Installs a suspend/resume hook** that unloads `applespi`, `brcmfmac`, and `facetimehd` before suspend and reloads them after resume, ensuring keyboard, WiFi, and webcam work on wake
 
 No packages are removed — `nvidia-utils` stays installed for any packages that depend on it.
 
@@ -109,6 +119,19 @@ Environment="SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=1"
 ```
 
 This overrides the `nvidia-utils` drop-in at `/usr/lib/systemd/system/<service>.service.d/10-nvidia-no-freeze-session.conf` which sets it to `false`.
+
+### Suspend/resume module hook
+
+```
+/usr/lib/systemd/system-sleep/macbook-suspend-modules
+```
+
+Before suspend, unloads:
+- `applespi` — Apple SPI keyboard/touchpad (fails to reinitialise SPI controller on wake)
+- `brcmfmac` / `brcmfmac_wcc` — Broadcom WiFi (firmware reload needed)
+- `facetimehd` — FaceTime HD webcam
+
+After resume, reloads all three in the correct order.
 
 ### Kernel parameter added
 

@@ -1,0 +1,22 @@
+#!/bin/bash
+# Unload and reload MacBook-specific modules around suspend/resume.
+# These out-of-tree or Apple-specific drivers do not properly
+# reinitialise hardware after s2idle, causing keyboard, WiFi,
+# and webcam failures on wake.
+#
+# Installed to /usr/lib/systemd/system-sleep/ by install.sh
+
+case "$1" in
+    pre)
+        # Order matters: unload dependents first
+        modprobe -r brcmfmac_wcc 2>/dev/null
+        modprobe -r brcmfmac 2>/dev/null
+        modprobe -r applespi 2>/dev/null
+        modprobe -r facetimehd 2>/dev/null
+        ;;
+    post)
+        modprobe applespi 2>/dev/null
+        modprobe brcmfmac 2>/dev/null
+        modprobe facetimehd 2>/dev/null
+        ;;
+esac
