@@ -42,6 +42,7 @@ fi
 
 # Remove from fstab
 sed -i '\|/swap|d' /etc/fstab
+sed -i '\|swapfile|d' /etc/fstab
 rmdir /swap 2>/dev/null || true
 
 echo "[4/5] Removing kernel parameters and initramfs hook..."
@@ -73,11 +74,15 @@ fi
 
 echo "[5/5] Removing hibernate overrides..."
 rm -f /etc/systemd/logind.conf.d/hibernate.conf
-rm -f /etc/systemd/sleep.conf.d/hibernate.conf
 rmdir /etc/systemd/logind.conf.d 2>/dev/null || true
-rmdir /etc/systemd/sleep.conf.d 2>/dev/null || true
 
-# Clean up old suspend hook if present
+# Remove suspend→hibernate override
+rm -f /etc/systemd/system/systemd-suspend.service.d/override.conf
+rmdir /etc/systemd/system/systemd-suspend.service.d 2>/dev/null || true
+
+# Clean up old files from previous versions
+rm -f /etc/systemd/sleep.conf.d/hibernate.conf
+rmdir /etc/systemd/sleep.conf.d 2>/dev/null || true
 rm -f /usr/lib/systemd/system-sleep/macbook-suspend-modules
 
 systemctl daemon-reload

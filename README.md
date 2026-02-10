@@ -153,12 +153,14 @@ HandleLidSwitchExternalPower=hibernate
 HandleSuspendKey=hibernate
 ```
 
-`/etc/systemd/sleep.conf.d/hibernate.conf`:
+`/etc/systemd/system/systemd-suspend.service.d/override.conf`:
 ```ini
-[Sleep]
-SuspendState=disk
-HibernateMode=platform shutdown
+[Service]
+ExecStart=
+ExecStart=/usr/lib/systemd/systemd-sleep hibernate
 ```
+
+This makes `systemctl suspend` (and anything that calls it, like the COSMIC moon button) actually trigger hibernate. Using `sleep.conf SuspendState=disk` breaks logind's `CanSuspend` detection, so we override the service directly instead.
 
 ## Supported Models
 

@@ -97,6 +97,12 @@ if findmnt -n -o FSTYPE / | grep -q btrfs; then
 
     swapon /swap/swapfile 2>/dev/null || true
 
+    # Add swap activation to fstab if not present
+    if ! grep -q "swapfile" /etc/fstab; then
+        echo "/swap/swapfile none swap defaults 0 0" >> /etc/fstab
+        echo "  Added swapfile to fstab"
+    fi
+
     # Get btrfs physical offset for resume
     RESUME_OFFSET=$(btrfs inspect-internal map-swapfile -r /swap/swapfile)
     RESUME_DEV="$ROOT_DEV"
@@ -110,6 +116,10 @@ else
     fi
 
     swapon /swapfile 2>/dev/null || true
+
+    if ! grep -q "swapfile" /etc/fstab; then
+        echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+    fi
 
     RESUME_OFFSET=$(filefrag -v /swapfile | awk '$1=="0:" {print substr($4, 1, length($4)-2)}')
     RESUME_DEV="$ROOT_DEV"
@@ -169,12 +179,13 @@ HandleLidSwitchExternalPower=hibernate
 HandleSuspendKey=hibernate
 EOF
 
-# sleep.conf: make "suspend" actually hibernate
-mkdir -p /etc/systemd/sleep.conf.d
-cat > /etc/systemd/sleep.conf.d/hibernate.conf <<EOF
-[Sleep]
-SuspendState=disk
-HibernateMode=platform shutdown
+# Override suspend service to actually call hibernate
+# (sleep.conf SuspendState=disk breaks CanSuspend detection)
+mkdir -p /etc/systemd/system/systemd-suspend.service.d
+cat > /etc/systemd/system/systemd-suspend.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/lib/systemd/systemd-sleep hibernate
 EOF
 
 systemctl daemon-reload
